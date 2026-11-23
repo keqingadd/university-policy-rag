@@ -1,0 +1,10 @@
+{"question": "智擎云有哪些核心模块？", "gold_doc": "01-产品概览.md"}
+{"question": "私有化部署的最低配置要求是什么？", "gold_doc": "02-部署与运维.md"}
+{"question": "API 的默认限流是多少 QPS？", "gold_doc": "03-API使用指南.md"}
+{"question": "知识库支持哪些文档格式？", "gold_doc": "04-常见问题FAQ.md"}
+{"question": "专业版一年多少钱？", "gold_doc": "05-定价与套餐.md"}
+{"question": "数据在存储时使用什么加密方式？", "gold_doc": "06-安全与合规.md"}
+{"question": "默认的切片长度和重叠是多少？", "gold_doc": "04-常见问题FAQ.md"}
+{"question": "遇到 429 错误应该怎么处理？", "gold_doc": "03-API使用指南.md"}
+{"question": "备份策略是多久一次？", "gold_doc": "02-部署与运维.md"}
+{"question": "免费试用有多长时间？", "gold_doc": "05-定价与套餐.md"}
