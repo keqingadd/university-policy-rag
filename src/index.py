@@ -10,6 +10,7 @@ from typing import Iterable, Sequence
 import numpy as np
 
 from .embedder import Embedder, load_embedder
+from .query import expand
 from .text import Chunk, chunk_text, load_documents, tokenize
 
 
@@ -124,12 +125,13 @@ class RagIndex:
             return []
         n = len(self.chunks)
         cand = min(max(top_k, candidates), n)
-        bm = self.bm25.scores(tokenize(query))
+        expanded = expand(query)
+        bm = self.bm25.scores(tokenize(expanded))
         bm_order = list(np.argsort(-bm)[:cand]) if mode in ("hybrid", "bm25") else []
         vec: np.ndarray | None = None
         vec_order: list[int] = []
         if mode in ("hybrid", "vector"):
-            vec = self._vector_scores(query, embedder or load_embedder())
+            vec = self._vector_scores(expanded, embedder or load_embedder())
             vec_order = list(np.argsort(-vec)[:cand])
         if mode == "bm25":
             order = [(i, float(bm[i])) for i in bm_order]

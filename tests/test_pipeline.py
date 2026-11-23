@@ -9,17 +9,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.embedder import HashingEmbedder  # noqa: E402
 from src.index import RagIndex  # noqa: E402
+from src.query import expand  # noqa: E402
 from src.text import chunk_text, tokenize  # noqa: E402
 
 
 class TextTest(unittest.TestCase):
     def test_tokenize_cjk(self) -> None:
-        tokens = tokenize("私有化部署")
-        self.assertIn("私有", tokens)
-        self.assertIn("私有化", tokens)
+        tokens = tokenize("家庭经济困难学生")
+        self.assertIn("家庭", tokens)
+        self.assertIn("家庭经", tokens)
 
     def test_tokenize_latin(self) -> None:
-        self.assertIn("api", tokenize("API 限流 60 QPS"))
+        self.assertIn("lpr", tokenize("LPR 减 60 个基点"))
 
     def test_chunk_keeps_heading(self) -> None:
         text = "# 标题\n\n## 小节A\n这是内容A。\n\n## 小节B\n这是内容B。"
@@ -33,6 +34,16 @@ class TextTest(unittest.TestCase):
         self.assertGreater(len(chunks), 1)
 
 
+class QueryTest(unittest.TestCase):
+    def test_expand_colloquial(self) -> None:
+        expanded = expand("国奖能拿多少钱")
+        self.assertIn("国家奖学金", expanded)
+        self.assertIn("国奖能拿多少钱", expanded)  # 原查询保留
+
+    def test_expand_no_hit_returns_original(self) -> None:
+        self.assertEqual(expand("今天天气怎么样"), "今天天气怎么样")
+
+
 class IndexTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -43,9 +54,9 @@ class IndexTest(unittest.TestCase):
         self.assertEqual(self.index.embeddings.shape[1], 1024)
 
     def test_search_finds_expected_doc(self) -> None:
-        hits = self.index.search("私有化部署最低配置", top_k=3)
+        hits = self.index.search("勤工助学每周不超过多少小时", top_k=3)
         docs = [h["chunk"].doc_id for h in hits]
-        self.assertIn("02-部署与运维.md", docs)
+        self.assertIn("05-高等学校勤工助学管理办法.md", docs)
 
     def test_unknown_question_still_returns(self) -> None:
         hits = self.index.search("今天天气怎么样", top_k=5)
