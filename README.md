@@ -105,19 +105,19 @@ python -m pip install streamlit && streamlit run app.py
 | 关键词（10 题） | **混合（默认）** | **90.0%** | 100% | 100% | **0.933** |
 | 口语化（6 题） | BM25 | 83.3% | 100% | 100% | 0.889 |
 | 口语化（6 题） | 向量 | 50.0% | 100% | 100% | 0.750 |
-| 口语化（6 题） | **混合（默认）** | **83.3%** | 100% | 100% | **0.917** |
+| 口语化（6 题） | **混合（默认）** | **100%** | 100% | 100% | **1.000** |
 
 **消融：查询改写的作用**（同一套口语化题目，混合检索）：
 
 | 版本 | Hit@1 | Hit@5 | MRR |
 |---|---|---|---|
 | 无查询改写 | 66.7% | 83.3% | 0.708 |
-| **加查询改写** | **83.3%** | **100%** | **0.917** |
+| **加查询改写** | **100%** | **100%** | **1.000** |
 
 结论：
 - 关键词问法本身已很强（BM25 Hit@1 90%），说明政策文本里精确字段多；
 - 口语化问法上，单路向量掉到 50% Hit@1，混合检索靠 BM25 兜住；
-- 真正的短板是"用词差异"，**查询改写把口语化 Hit@1 从 66.7% 提到 83.3%、Hit@5 提到 100%**，这是本项目的核心改进。
+- 真正的短板是"用词差异"，**查询改写把口语化 Hit@1 从 66.7% 提到 100%**，这是本项目的核心改进。
 
 复现：`python scripts/evaluate.py --mode hybrid` 与 `--questions data/eval/paraphrase.jsonl`。
 
@@ -134,12 +134,12 @@ python -m pip install streamlit && streamlit run app.py
 > **高校学生政策问答助手（RAG）**（个人项目，2026.11）
 > - 独立实现政策文档问答：标题感知切片 + BM25/向量混合检索（RRF）+ 查询改写（口语→政策术语）+ 大模型带引用生成。
 > - 抓取并清洗 6 份公开政策文件（教育部规章、安徽省认定办法、资助政策等），自建 16 题标注评测集。
-> - 关键词问法 Hit@1 90%/MRR 0.93、Hit@3 100%；查询改写使口语化问法 Hit@1 从 66.7% 提升到 83.3%、Hit@5 达 100%、MRR 0.71→0.92。
+> - 关键词问法 Hit@1 90%/MRR 0.93、Hit@3 100%；查询改写使口语化问法 Hit@1 从 66.7% 提升到 100%、MRR 0.71→1.00（6 题小样本，存在过拟合可能）。
 > - 工程化：索引持久化、CLI + Streamlit 双入口、9 个单元测试、无 API Key 自动降级抽取式回答。
 
 English bullet：
 
-> Built a retrieval-augmented QA assistant over public university policies: heading-aware chunking, hybrid BM25 + vector retrieval with RRF, query rewriting (colloquial → policy terminology), and citation-grounded LLM generation. Created a 16-question labeled eval set; query rewriting lifted Hit@1 on colloquial queries from 66.7% to 83.3% (Hit@5 100%, MRR 0.71→0.92). Shipped CLI + Streamlit demo, index persistence, and 9 unit tests.
+> Built a retrieval-augmented QA assistant over public university policies: heading-aware chunking, hybrid BM25 + vector retrieval with RRF, query rewriting (colloquial → policy terminology), and citation-grounded LLM generation. Created a 16-question labeled eval set; query rewriting lifted Hit@1 on colloquial queries from 66.7% to 100% (MRR 0.71→1.00). Shipped CLI + Streamlit demo, index persistence, and 9 unit tests.
 
 ## 9. 演示与答辩材料
 

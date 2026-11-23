@@ -1,4 +1,4 @@
-"""RAG 主流程：检索 -> 拼上下文 -> 生成（无 API Key 时降级为抽取式回答）。"""
+"""RAG 主流程：检索 -> 句级重排 -> 拼上下文 -> 生成（无 API Key 时降级抽取式）。"""
 from __future__ import annotations
 
 import re
@@ -7,6 +7,7 @@ import time
 from . import llm
 from .embedder import load_embedder
 from .index import RagIndex
+from .query import expand
 from .text import tokenize
 
 SYSTEM_PROMPT = (
@@ -18,16 +19,51 @@ SYSTEM_PROMPT = (
 _SENT_SPLIT = re.compile(r"(?<=[。！？!?；;])")
 
 
+def split_sentences(text: str) -> list[str]:
+    return [s.strip() for s in _SENT_SPLIT.split(text or "") if s.strip()]
+
+
+def usable_sentences(text: str) -> list[str]:
+    """可用于摘录的句子：去掉标题行、章节名和过短的句子。"""
+    out = []
+    for s in split_sentences(text):
+        s = s.strip().lstrip("#").strip()
+        if len(s) < 12:
+            continue
+        if re.match(r"^第[一二三四五六七八九十百]+[章节条]", s) and len(s) < 20:
+            continue
+        out.append(s)
+    return out or split_sentences(text)
+
+
 def best_snippet(text: str, question: str, max_len: int = 180) -> str:
     """在切片里挑与问题最相关的一句，避免摘录总是从切片开头截。"""
-    sentences = [s.strip() for s in _SENT_SPLIT.split(text or "") if s.strip()]
+    sentences = usable_sentences(text)
     if not sentences:
         return (text or "").strip()[:max_len]
-    q_tokens = set(tokenize(question))
+    q_tokens = set(tokenize(expand(question)))
     best = max(sentences, key=lambda s: len(q_tokens & set(tokenize(s))))
     if len(best) > max_len:
         best = best[:max_len] + "…"
     return best
+
+
+def rerank_by_sentence(hits: list[dict], question: str, top_k: int, idf: dict[str, float]) -> list[dict]:
+    """句级重排：用“切片内最佳句（含标题前缀）的 IDF 加权词重合度”重排候选。
+
+    政策文本里“名额”“6000 元”这类词区分度很高，用 IDF 加权能压过
+    “每生每年”“万元”这种到处都有的词，避免挑到语义相近但答非所问的句子。
+    """
+    q_tokens = set(tokenize(expand(question)))
+    scored = []
+    for h in hits:
+        text = h["chunk"].text
+        heading = text.splitlines()[0] if text else ""
+        sentence = best_snippet(text, question, max_len=400)
+        weight = sum(idf.get(t, 0.0) for t in q_tokens & set(tokenize(heading + " " + sentence)))
+        scored.append((weight, -h["rank"], h))
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return [h for _, _, h in scored[:top_k]]
 
 
 def build_prompt(question: str, hits: list[dict]) -> str:
@@ -60,7 +96,11 @@ class RagPipeline:
 
     def ask(self, question: str) -> dict:
         started = time.perf_counter()
-        hits = self.index.search(question, top_k=self.top_k, mode=self.mode, embedder=self.embedder)
+        # 多召回一些候选，再做句级重排，避免精确答案因排序靠后而被丢掉
+        candidates = self.index.search(
+            question, top_k=max(self.top_k * 3, 15), mode=self.mode, embedder=self.embedder
+        )
+        hits = rerank_by_sentence(candidates, question, self.top_k, self.index.bm25.idf)
         contexts = [
             {
                 "id": i + 1,

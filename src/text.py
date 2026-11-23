@@ -10,6 +10,7 @@ _CJK_RE = re.compile(r"[\u4e00-\u9fff]+")
 _LATIN_RE = re.compile(r"[a-zA-Z0-9_+#.]+")
 _SENT_SPLIT = re.compile(r"(?<=[。！？!?；;])")
 _HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*)$")
+_NUMBERED_RE = re.compile(r"^(\d{2})[\s、.．]+(\S.{2,30})$")
 SUPPORTED_SUFFIX = {".md", ".markdown", ".txt"}
 
 
@@ -79,8 +80,15 @@ def _sections(text: str) -> list[tuple[str, str]]:
             flush()
             heading = m.group(2).strip()
             body = []
-        else:
-            body.append(line)
+            continue
+        n = _NUMBERED_RE.match(line.strip())
+        if n and len(line.strip()) <= 40:
+            # 形如“01 本专科生国家奖学金”“02 本专科生国家励志奖学金”的小节标题
+            flush()
+            heading = n.group(1) + " " + n.group(2).strip()
+            body = []
+            continue
+        body.append(line)
     flush()
     return [(h, b) for h, b in sections if b or h]
 
