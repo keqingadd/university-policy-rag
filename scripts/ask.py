@@ -23,7 +23,7 @@ def main() -> None:
 
     question = " ".join(args.question).strip()
     if not question:
-        question = "智擎云支持哪些部署方式？"
+        question = "家庭经济困难学生认定多久评一次？"
         print(f"（未提供问题，使用示例：{question}）")
 
     pipe = RagPipeline(RagIndex.load(args.index), top_k=args.top_k, mode=args.mode)
