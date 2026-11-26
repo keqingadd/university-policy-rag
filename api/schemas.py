@@ -49,6 +49,54 @@ class HealthResponse(BaseModel):
     detail: str | None = None
 
 
+class AgentChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(..., description="用户消息，去除首尾空白后 1~2000 字")
+    session_id: str | None = Field(
+        None,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]{1,64}$",
+        description="多轮会话 id，不传则服务端生成",
+    )
+    max_steps: int | None = Field(None, ge=1, le=3, description="本次最多调用几个工具")
+
+
+class ToolCallTrace(BaseModel):
+    tool: str
+    args: dict
+    ok: bool
+    latency_ms: float
+    error: str | None = None
+    message: str | None = None
+    summary: str | None = None
+
+
+class Citation(BaseModel):
+    id: int
+    doc_id: str
+    title: str
+    snippet: str
+
+
+class AgentChatResponse(BaseModel):
+    session_id: str
+    message: str
+    answer: str
+    tool_calls: list[ToolCallTrace]
+    citations: list[Citation]
+    used_tools: list[str]
+    planner: str
+    steps_used: int
+    latency_ms: float
+
+
+class ToolSpec(BaseModel):
+    name: str
+    description: str
+    parameters: dict
+
+
 class ErrorDetail(BaseModel):
     code: str
     message: str

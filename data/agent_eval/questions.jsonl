@@ -1,0 +1,23 @@
+# Agent 工具选择评测集：20 条，覆盖 3 个工具与“该走知识库”的默认回落
+# expected_tool 是人工标注的正确答案，评测脚本只做规划层打分（不执行工具），
+# 这样离线也能复现，不受网络与索引影响。
+{"id": "q01", "question": "国家励志奖学金一年多少钱", "expected_tool": "policy_search", "category": "资助金额"}
+{"id": "q02", "question": "国家助学金什么时候发到卡上", "expected_tool": "policy_search", "category": "资助发放"}
+{"id": "q03", "question": "生源地助学贷款毕业后怎么还款", "expected_tool": "policy_search", "category": "助学贷款"}
+{"id": "q04", "question": "勤工助学的每月工时上限是多少", "expected_tool": "policy_search", "category": "勤工助学"}
+{"id": "q05", "question": "家庭经济困难学生认定需要哪些材料", "expected_tool": "policy_search", "category": "困难认定"}
+{"id": "q06", "question": "转专业在大几可以申请", "expected_tool": "policy_search", "category": "学籍管理"}
+{"id": "q07", "question": "考试作弊会受到什么处分", "expected_tool": "policy_search", "category": "纪律处分"}
+{"id": "q08", "question": "国家奖学金的名额是怎么分配的", "expected_tool": "policy_search", "category": "名额分配"}
+{"id": "q09", "question": "宿舍晚归会怎么处理", "expected_tool": "policy_search", "category": "日常管理"}
+{"id": "q10", "question": "毕业需要修满多少学分", "expected_tool": "policy_search", "category": "毕业要求"}
+{"id": "q11", "question": "今天第几教学周了", "expected_tool": "calendar", "category": "校历"}
+{"id": "q12", "question": "2026-12-01 是第几教学周", "expected_tool": "calendar", "category": "校历"}
+{"id": "q13", "question": "什么时候放寒假", "expected_tool": "calendar", "category": "假期"}
+{"id": "q14", "question": "期末考试周是哪几天", "expected_tool": "calendar", "category": "考试安排"}
+{"id": "q15", "question": "国庆节放假是怎么安排的", "expected_tool": "calendar", "category": "假期"}
+{"id": "q16", "question": "元旦放假几天", "expected_tool": "calendar", "category": "假期"}
+{"id": "q17", "question": "开学报到是哪天", "expected_tool": "calendar", "category": "校历"}
+{"id": "q18", "question": "看看这个通知 https://www.example.edu.cn/notice/1.html", "expected_tool": "web_fetch", "category": "网页"}
+{"id": "q19", "question": "抓取 https://www.example.edu.cn/news 的正文", "expected_tool": "web_fetch", "category": "网页"}
+{"id": "q20", "question": "帮我读一下 https://www.example.edu.cn/a.html", "expected_tool": "web_fetch", "category": "网页"}

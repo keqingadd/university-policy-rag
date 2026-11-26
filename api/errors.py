@@ -14,6 +14,17 @@ ERROR_STATUS: dict[str, int] = {
     "INVALID_PARAM": 422,
     "INDEX_NOT_READY": 503,
     "INTERNAL_ERROR": 500,
+    # Agent 接口
+    "EMPTY_MESSAGE": 400,
+    "MESSAGE_TOO_LONG": 400,
+    "UNKNOWN_TOOL": 400,
+    "INVALID_TOOL_ARGS": 422,
+    "TOOL_EXEC_FAILED": 502,
+    "FETCH_FAILED": 502,
+    "FORBIDDEN_URL": 400,
+    "FETCH_EMPTY": 502,
+    "CALENDAR_NOT_READY": 503,
+    "CALENDAR_BROKEN": 503,
 }
 
 DEFAULT_MESSAGES: dict[str, str] = {
@@ -21,6 +32,12 @@ DEFAULT_MESSAGES: dict[str, str] = {
     "INVALID_PARAM": "请求参数不合法",
     "INDEX_NOT_READY": "索引未就绪，请先构建索引",
     "INTERNAL_ERROR": "服务内部错误",
+    "EMPTY_MESSAGE": "消息不能为空",
+    "UNKNOWN_TOOL": "没有这个工具",
+    "INVALID_TOOL_ARGS": "工具参数不合法",
+    "TOOL_EXEC_FAILED": "工具执行失败",
+    "FETCH_FAILED": "网页抓取失败",
+    "FORBIDDEN_URL": "该地址不允许访问",
 }
 
 

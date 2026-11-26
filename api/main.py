@@ -11,8 +11,15 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from agent.loop import AgentLoop
+from tools.calendar import calendar_tool
+from tools.policy_search import policy_search_tool
+from tools.registry import ToolRegistry
+from tools.web_fetch import web_fetch_tool
+
 from .config import VERSION, load_settings
 from .errors import AppError
+from .routes_agent import build_agent_router
 from .schemas import (
     ContextItem,
     ErrorDetail,
@@ -66,6 +73,17 @@ def create_app() -> FastAPI:
             app.state.service = None
             app.state.load_error = exc
             logger.error("index not ready: %s", exc.message)
+
+        registry = ToolRegistry()
+        registry.register(policy_search_tool(lambda: app.state.service))
+        registry.register(calendar_tool(settings.calendar_path))
+        registry.register(web_fetch_tool())
+        app.state.agent = AgentLoop(
+            registry,
+            default_max_steps=settings.agent_max_steps,
+            max_message_chars=settings.max_question_chars,
+        )
+        logger.info("agent tools: %s", ",".join(registry.names()))
         yield
 
     app = FastAPI(
@@ -77,6 +95,9 @@ def create_app() -> FastAPI:
     )
     app.state.service = None
     app.state.load_error = None
+    app.state.agent = None
+
+    app.include_router(build_agent_router(lambda: app.state.agent))
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):

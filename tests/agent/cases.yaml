@@ -1,0 +1,68 @@
+# Agent 工具选择评测集（也是接口级回归用例）
+# 每条的 question 走同一套 planner：期望选中的工具写在 tool 里。
+# 这些用例只覆盖“规划”这一层，真实检索质量由 data/agent_eval 的评测脚本单独跑。
+cases:
+  - question: 国家励志奖学金一年多少钱
+    tool: policy_search
+    answer_contains: 假答案
+    note: 金额类口语，走知识库
+
+  - question: 国家助学贷款的申请条件是什么
+    tool: policy_search
+
+  - question: 勤工助学一个月能挣多少钱
+    tool: policy_search
+
+  - question: 家庭经济困难学生认定要交什么材料
+    tool: policy_search
+
+  - question: 考试作弊会受到什么处分
+    tool: policy_search
+
+  - question: 转专业需要什么条件
+    tool: policy_search
+
+  - question: 国家奖学金的名额是怎么分配的
+    tool: policy_search
+
+  - question: 学校有没有相关规定
+    tool: policy_search
+
+  - question: 宿舍可以养宠物吗
+    tool: policy_search
+    note: 没有命中任何工具关键词也应该回落知识库
+
+  - question: 今天第几教学周了
+    tool: calendar
+    note: 校历类，不应去查知识库
+
+  - question: 什么时候放寒假
+    tool: calendar
+
+  - question: 期末考试周是哪几天
+    tool: calendar
+
+  - question: 2026-12-01 是第几周
+    tool: calendar
+    expect_args:
+      date: "2026-12-01"
+
+  - question: 国庆节放几天假
+    tool: calendar
+
+  - question: 离开学还有几天
+    tool: calendar
+
+  - question: 看看这个通知 https://www.example.edu.cn/notice/1.html
+    tool: web_fetch
+    expect_args:
+      url: "https://www.example.edu.cn/notice/1.html"
+    note: 带 URL 一律交给网页抓取
+
+  - question: 抓取 https://www.example.edu.cn/news 的正文
+    tool: web_fetch
+    expect_args:
+      url: "https://www.example.edu.cn/news"
+
+  - question: 帮我总结下 https://www.example.edu.cn/a.html
+    tool: web_fetch

@@ -32,6 +32,8 @@ class Settings:
     default_mode: str = "hybrid"
     max_question_chars: int = 2000
     version: str = VERSION
+    calendar_path: Path = Path("data/calendar/semester.json")
+    agent_max_steps: int = 2
 
 
 def load_settings() -> Settings:
@@ -41,4 +43,6 @@ def load_settings() -> Settings:
         default_top_k=_int_env("RAG_TOP_K", 5, 1, 10),
         default_mode=_mode_env("RAG_MODE", "hybrid"),
         max_question_chars=_int_env("RAG_MAX_QUESTION_CHARS", 2000, 1, 20000),
+        calendar_path=Path(os.environ.get("AGENT_CALENDAR", "data/calendar/semester.json")),
+        agent_max_steps=_int_env("AGENT_MAX_STEPS", 2, 1, 3),
     )

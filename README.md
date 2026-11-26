@@ -2,7 +2,7 @@
 
 > 把《学生管理规定》《资助政策》等权威文件变成"能回答、能溯源"的问答助手：**标题感知切片 → BM25 + 向量混合检索（RRF）→ 查询改写 → 大模型带引用生成**，附检索评测脚本、单元测试和 Streamlit 演示界面。
 
-![python](https://img.shields.io/badge/Python-3.10%2B-blue) ![deps](https://img.shields.io/badge/核心依赖-numpy-green) ![tests](https://img.shields.io/badge/tests-40%20passed-brightgreen) ![api](https://img.shields.io/badge/HTTP-FastAPI-009688) ![bench](https://img.shields.io/badge/QPS-157%20%40%20P95%2069ms-orange)
+![python](https://img.shields.io/badge/Python-3.10%2B-blue) ![deps](https://img.shields.io/badge/核心依赖-numpy-green) ![tests](https://img.shields.io/badge/tests-90%20passed-brightgreen) ![api](https://img.shields.io/badge/HTTP-FastAPI-009688) ![agent](https://img.shields.io/badge/Agent-3%20tools%20%2F%2090%E6%9D%A1%E7%94%A8%E4%BE%8B-7b61ff) ![bench](https://img.shields.io/badge/QPS-157%20%40%20P95%2069ms-orange)
 
 ---
 
@@ -31,7 +31,7 @@
 
 ## 3. 架构
 
-`@mermaid
+```mermaid
 flowchart LR
     A[政策原文 .md] --> B[标题感知切片<br/>500 字 / 重叠 80]
     B --> C1[BM25 关键词索引]
@@ -44,7 +44,7 @@ flowchart LR
     D --> E[Top-k 上下文 + 引用编号]
     E --> F[大模型生成<br/>只依据资料 · 标注引用]
     F --> G[CLI / Streamlit 界面]
-`@
+```
 
 关键设计：
 - **标题感知切片**：按 Markdown 标题切段，长段再按句子切并保留标题前缀，避免"公示 5 个工作日"这种关键句被切散。
@@ -55,7 +55,7 @@ flowchart LR
 
 ## 4. 目录结构
 
-`@text
+```text
 rag-kb-demo/
 ├─ app.py                     # Streamlit 演示界面
 ├─ src/
@@ -82,27 +82,40 @@ rag-kb-demo/
 │  ├─ service.py              # 索引加载、pipeline 缓存、参数校验
 │  ├─ errors.py               # 错误码 → HTTP 状态映射
 │  └─ config.py               # 环境变量配置
+├─ tools/                     # Agent 工具层
+│  ├─ registry.py             # 工具注册 + JSON Schema 校验 + 错误码
+│  ├─ policy_search.py        # 工具 1：政策知识库检索
+│  ├─ calendar.py             # 工具 2：校历（教学周/假期/下一节点）
+│  └─ web_fetch.py            # 工具 3：抓网页正文（拒内网地址）
+├─ agent/                     # 规划 + 多轮记忆 + 执行循环
+│  ├─ planner.py              # 规则规划器（可选大模型，失败自动回落）
+│  ├─ memory.py               # 按 session_id 存最近 20 轮
+│  └─ loop.py                 # 规划 → 调工具 → 组织答案 → 写记忆
+├─ eval/agent_eval.py         # 20 条题的「工具选择准确率」评测
+├─ data/calendar/             # 示例校历（非真实校历，替换即可接入）
+├─ data/agent_eval/           # 工具选择评测集（20 条 jsonl）
 ├─ tests/
 │  ├─ test_pipeline.py        # 9 个单元测试
-│  └─ api/                    # 31 个接口/并发/冒烟用例（cases.yaml 驱动）
+│  ├─ agent/                  # 38 个工具/规划/校历/记忆用例（cases.yaml 驱动）
+│  └─ api/                    # 43 个接口/并发/冒烟/Agent 用例
 ├─ loadtest/locustfile.py     # locust 压测脚本
 ├─ scripts/bench.py           # 无依赖压测脚本（QPS / P95）
 ├─ Dockerfile                 # 多阶段构建、非 root、HEALTHCHECK
 ├─ docker-compose.yml
-└─ docs/                      # API 文档、测试用例清单、压测报告、演示脚本、答辩问答
-`@
+└─ docs/                      # API / Agent 文档、测试用例清单、压测报告、演示脚本、答辩问答
+```
 
 ## 5. 快速开始
 
 要求 Python 3.10+，核心只依赖 numpy。
 
-`@bash
+```bash
 python -m pip install -r requirements.txt
 python scripts/build_index.py
 python scripts/ask.py "家庭经济困难学生认定多久评一次？"
 python scripts/evaluate.py --mode hybrid
 python -m pip install streamlit && streamlit run app.py
-`@
+```
 
 接大模型（可选）：设置 `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`（见 `.env.example`）。
 
@@ -191,7 +204,74 @@ locust -f loadtest/locustfile.py --host http://127.0.0.1:8000 --headless -u 20 -
 
 容器比裸 uvicorn 多一层端口映射与 Docker 网络转发，端到端 P95 从 68.9 ms 升到 81.9 ms，吞吐仍在同一量级。
 
-## 7. 评测结果
+## 7. Agent：工具调用 / 多轮记忆 / 规划评测
+
+FAQ 助手只能查政策库，遇到"今天第几教学周""看看学校官网这个通知"就答不了。这一层给它三个工具、一个可解释的规划器、会话记忆，以及一套能量化"工具选得对不对"的评测。
+
+```mermaid
+flowchart LR
+    Q[用户消息] --> P[规则规划器<br/>链接/校历词/政策词]
+    P -->|有 URL| W[web_fetch]
+    P -->|校历词| C[calendar]
+    P -->|默认| S[policy_search]
+    W --> A[组织答案 + 引用]
+    C --> A
+    S --> A
+    A --> M[SessionMemory<br/>最近 20 轮]
+    M --> P
+```
+
+### 7.1 三个工具
+
+| 工具 | 触发方式（规则版） | 入参 | 返回 |
+|---|---|---|---|
+| `policy_search` | 命中政策术语（奖学金/贷款/处分/转专业…）或无命中时的默认项 | `question`、`top_k` 1~10 | 答案 + `contexts` 出处 |
+| `calendar` | 命中校历术语（第几周/开学/寒假/考试周/节假日…） | `date`（YYYY-MM-DD，缺省今天） | 教学周、是否假期、下一个节点及天数 |
+| `web_fetch` | 消息里出现 `http(s)://` 链接 | `url`、`max_chars` | 标题 + 去标签正文 + 状态码 |
+
+参数校验在 `tools/registry.py`：类型、必填、范围、长度、正则、枚举、未知字段七项，失败返回 `INVALID_TOOL_ARGS`（422）；工具内部异常收敛成 `TOOL_EXEC_FAILED`（502）。
+
+### 7.2 一条命令试
+
+```bash
+python -m uvicorn api.main:app --port 8000
+curl -s -X POST http://127.0.0.1:8000/agent/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"今天第几教学周了","session_id":"demo"}'
+```
+
+本机实测（2026-11-27，uvicorn 单进程）：
+
+| 消息 | 选中工具 | 结果 |
+|---|---|---|
+| 国家励志奖学金一年多少钱？ | policy_search | 200，5 条切片、4.9 ms、5 条 citations |
+| 今天第几教学周了 | calendar | 200，`2026-11-27（周五）；第 12 教学周；下一个节点「元旦」还有 35 天` |
+| 看看 https://www.moe.gov.cn/ 首页 | web_fetch | 200，HTTP 200、101632 B、104.6 ms |
+| ... http://127.0.0.1:8000/health | web_fetch | 内网地址被拒，`tool_calls[0].error = FORBIDDEN_URL` |
+
+### 7.3 评测：工具选择准确率
+
+20 条标注题（政策 10 / 校历 7 / 网页 3），`python eval/agent_eval.py --live` 本机结果：
+
+| 指标 | 值 |
+|---|---|
+| 工具选择准确率 | **20/20 = 100%** |
+| 真实执行成功 | 17/20 = 85%（3 条网页用例的域名不存在，如实记 `FETCH_FAILED`） |
+| 政策题引用覆盖率 | 10/10 = 100% |
+| 端到端延迟 | P50 3.9 ms / P95 17.5 ms |
+
+> 必须说清楚：这 20 条用例和关键词表是同一轮写的，规划层 100% 是"自己出的卷子自己考"，不代表泛化能力；真实问法一定会掉。同理，大模型规划路径（配置 `LLM_API_KEY` 后启用）在**本机未实测**，不写它的数字。
+
+### 7.4 局限
+
+- 规划靠关键词，遇到"奖学金什么时候到账"这类跨域问法会走知识库（当前可接受的默认）；
+- `web_fetch` 只抓单页、不执行 JS，通知列表页要再加一层链接抽取；
+- 记忆在进程内，多副本部署要换 Redis（未做）；
+- 校历是`data/calendar/semester.json` 里的**示例数据**，不是任何学校的真实校历，替换文件即可接入。
+
+完整设计与答辩说明见 [docs/AGENT.md](docs/AGENT.md)。
+
+## 8. 评测结果
 
 评测方法：10 题关键词问法 + 6 题口语化问法，每题标注 `gold_doc`（正确来源文档），统计检索结果中 gold 文档的名次，计算 Hit@k 与 MRR。
 
@@ -218,7 +298,7 @@ locust -f loadtest/locustfile.py --host http://127.0.0.1:8000 --headless -u 20 -
 
 复现：`python scripts/evaluate.py --mode hybrid` 与 `--questions data/eval/paraphrase.jsonl`。
 
-## 8. 设计决策（答辩时会被问）
+## 9. 设计决策（答辩时会被问）
 
 1. **为什么切片 500 字、重叠 80？** 规章/办法的"条"通常 100-400 字，500 字能装下完整条款；重叠 80 字防止答案跨块被截断。
 2. **为什么 BM25 + 向量混合？** 政策文本有大量精确字段（10 日、5 个工作日、LPR 减 60 个基点、16000 元），纯向量对这类精确匹配明显更弱（口语化 Hit@1 仅 50%）；RRF 融合不需要调权重。
@@ -226,24 +306,26 @@ locust -f loadtest/locustfile.py --host http://127.0.0.1:8000 --headless -u 20 -
 4. **怎么控制幻觉？** 提示词限定"只能依据资料、必须标引用、资料不足就说无法确定"；无 Key 时降级抽取式；后续加引用校验。
 5. **数据会不会过期？** 会。政策是抓取时点的公开文本，所以产品上要支持"文档版本 + 引用溯源 + 更新提示"，这也是下一步。
 
-## 9. 简历怎么写
+## 10. 简历怎么写
 
 > **高校学生政策问答助手（RAG）**（个人项目，2026.11）
 > - 独立实现政策文档问答：标题感知切片 + BM25/向量混合检索（RRF）+ 查询改写（口语→政策术语）+ 大模型带引用生成。
 > - 抓取并清洗 6 份公开政策文件（教育部规章、安徽省认定办法、资助政策等），自建 16 题标注评测集。
 > - 关键词问法 Hit@1 90%/MRR 0.93、Hit@3 100%；查询改写使口语化问法 Hit@1 从 66.7% 提升到 100%、MRR 0.71→1.00（6 题小样本，存在过拟合可能）。
 > - 工程化：索引持久化、CLI + Streamlit 双入口、9 个单元测试、无 API Key 自动降级抽取式回答。
+> - 服务化：FastAPI 接口层（统一错误码 + request-id）、40 条 pytest 数据驱动接口测试、多阶段 Dockerfile（343 MB、非 root）、GitHub Actions 三 job、压测实测 157 QPS / P95 69 ms。
+> - Agent 层：3 个工具（政策检索 / 校历 / 网页抓取）+ 可解释规则规划器 + 多轮会话记忆；20 条标注集上工具选择准确率 20/20，接口端到端 P95 17.5 ms（自建小样本，不代表泛化）。
 
 English bullet：
 
-> Built a retrieval-augmented QA assistant over public university policies: heading-aware chunking, hybrid BM25 + vector retrieval with RRF, query rewriting (colloquial → policy terminology), and citation-grounded LLM generation. Created a 16-question labeled eval set; query rewriting lifted Hit@1 on colloquial queries from 66.7% to 100% (MRR 0.71→1.00). Shipped CLI + Streamlit demo, index persistence, and 9 unit tests.
+> Built a retrieval-augmented QA assistant over public university policies: heading-aware chunking, hybrid BM25 + vector retrieval with RRF, query rewriting (colloquial → policy terminology), and citation-grounded LLM generation. Created a 16-question labeled eval set; query rewriting lifted Hit@1 on colloquial queries from 66.7% to 100% (MRR 0.71→1.00). Shipped a FastAPI service (40 pytest cases, multi-stage Docker, GitHub Actions CI, 157 QPS at P95 69 ms) and a tool-calling agent layer (policy search / calendar / web fetch, session memory, 20/20 tool-selection accuracy on a self-built set).
 
-## 10. 演示与答辩材料
+## 11. 演示与答辩材料
 
 - `docs/演示脚本.md`：3 分钟现场演示逐句稿
 - `docs/答辩问答.md`：高频追问与参考答案
 
-## 11. 改进路线图
+## 12. 改进路线图
 
 - [ ] Cross-encoder rerank（bge-reranker）提升 Top-3 精度
 - [ ] 用大模型做查询改写，与同义词表做 A/B
@@ -252,8 +334,12 @@ English bullet：
 - [x] Docker 化（多阶段构建 + 非 root + compose）
 - [x] HTTP 接口层 + YAML 数据驱动接口测试 + CI
 - [x] 压测基线（bench.py / locust）
+- [x] Agent 工具调用（3 个工具 + 多轮记忆 + 20 条评测集）
 - [ ] 缓存与流式输出
+- [ ] 用真实问法日志扩充工具选择评测集（当前 20 条与关键词表同源）
+- [ ] 大模型规划路径实测（配置 LLM_API_KEY 后先跑这 20 条）
+- [ ] 会话记忆换 Redis，支持多副本
 
-## 12. 许可
+## 13. 许可
 
 仅用于学习与赛事展示；政策文本版权归原发布机构，引用时请注明来源。
