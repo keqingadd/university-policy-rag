@@ -1,0 +1,25 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: university-policy-rag:local
+    container_name: policy-rag
+    ports:
+      - "8000:8000"
+    environment:
+      RAG_TOP_K: "5"
+      RAG_MODE: "hybrid"
+      RAG_MAX_QUESTION_CHARS: "2000"
+      LOG_LEVEL: "INFO"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
