@@ -136,16 +136,17 @@ curl -s http://127.0.0.1:8000/health
 
 镜像两阶段构建：builder 装依赖并预构建索引，runtime 只带虚拟环境与索引，以非 root 用户 `appuser` 运行，内置 `HEALTHCHECK`。
 
-CI 实际构建结果（GitHub Actions ubuntu runner，每次 push 自动跑）：
+镜像构建与容器冒烟在两处真实执行过：GitHub Actions 的 ubuntu runner（每次 push 自动跑），以及作者本机 Windows 11 + Docker Desktop 4.100.1（WSL2 后端）。
 
 | 指标 | 实测值 |
 |---|---|
 | 镜像体积 | **343 MB**（slim + 两阶段 + 不装 streamlit/测试依赖） |
-| 容器启动 | `docker run -d -p 8000:8000` 后 3 秒内 `/health` 返回 200 |
-| 容器内 `/health` | `{"status":"ok","chunks":60,"embedder":"hash","version":"0.1.0"}` |
-| 容器内 `POST /query` | 200，返回政策原文摘录 + contexts |
+| 本机 `docker compose up -d --build` | 构建耗时约 70 秒（首次含拉基础镜像），容器状态 `Up (healthy)` |
+| 容器内 `/health` | 200 `{"status":"ok","chunks":60,"embedder":"hash","version":"0.1.0","index_dir":"/app/data/index"}` |
+| 容器内 `POST /query` | 200，返回政策原文摘录 + 3 条 contexts，`latency_ms` 约 4 ms |
+| 端口映射 | `0.0.0.0:8000->8000/tcp`，宿主 `curl http://127.0.0.1:8000/query` 直接命中 |
 
-> 说明：作者本机为 Windows 家庭版 + 普通用户权限，装 Docker Desktop 需要管理员与 WSL2，故本机未跑 `docker compose up`；上面的镜像构建与容器冒烟是在 GitHub Actions 的 ubuntu runner 上真实执行的，日志见 Actions 的 "镜像构建与容器冒烟" job。
+> 说明：本机是 Windows 11 25H2 + Docker Desktop（WSL2 后端），`docker compose up` 是在装好 WSL2 并重启后跑通的；上面的数字来自本机这一次真实构建与请求，不是估算。
 
 ### 6.3 测试
 
@@ -180,6 +181,15 @@ locust -f loadtest/locustfile.py --host http://127.0.0.1:8000 --headless -u 20 -
 | 32 | 1000 | 148.5 | 211.8 ms | 235.3 ms | 244.8 ms | 0% |
 
 服务端自测 `latency_ms` 的 P95 只有 5.9 ms，端到端延迟主要是并发排队。详细分析见 [docs/压测报告.md](docs/压测报告.md)。
+
+容器内（`docker compose` 起的那一份，走端口映射）：
+
+| 并发 | 请求数 | QPS | P50 | P95 | P99 | 服务端 P95 | 错误率 |
+|---|---|---|---|---|---|---|---|
+| 8 | 300 | **107.5** | 77.6 ms | **81.9 ms** | 83.5 ms | 15.2 ms | 0% |
+| 32 | 1000 | 195.1 | 162.9 ms | 173.5 ms | 181.1 ms | 4.5 ms | 0% |
+
+容器比裸 uvicorn 多一层端口映射与 Docker 网络转发，端到端 P95 从 68.9 ms 升到 81.9 ms，吞吐仍在同一量级。
 
 ## 7. 评测结果
 

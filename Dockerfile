@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # 两阶段：builder 装依赖 + 预构建索引；runtime 只带运行必需的东西，非 root 运行。
 ARG PYTHON_IMAGE=python:3.12-slim
 
