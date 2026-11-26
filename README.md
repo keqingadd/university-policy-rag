@@ -136,6 +136,17 @@ curl -s http://127.0.0.1:8000/health
 
 镜像两阶段构建：builder 装依赖并预构建索引，runtime 只带虚拟环境与索引，以非 root 用户 `appuser` 运行，内置 `HEALTHCHECK`。
 
+CI 实际构建结果（GitHub Actions ubuntu runner，每次 push 自动跑）：
+
+| 指标 | 实测值 |
+|---|---|
+| 镜像体积 | **343 MB**（slim + 两阶段 + 不装 streamlit/测试依赖） |
+| 容器启动 | `docker run -d -p 8000:8000` 后 3 秒内 `/health` 返回 200 |
+| 容器内 `/health` | `{"status":"ok","chunks":60,"embedder":"hash","version":"0.1.0"}` |
+| 容器内 `POST /query` | 200，返回政策原文摘录 + contexts |
+
+> 说明：作者本机为 Windows 家庭版 + 普通用户权限，装 Docker Desktop 需要管理员与 WSL2，故本机未跑 `docker compose up`；上面的镜像构建与容器冒烟是在 GitHub Actions 的 ubuntu runner 上真实执行的，日志见 Actions 的 "镜像构建与容器冒烟" job。
+
 ### 6.3 测试
 
 ```bash
