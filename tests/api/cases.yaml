@@ -1,0 +1,321 @@
+# 接口测试用例表：新增用例只改这个文件，不用动 Python。
+# expect 支持的键：
+#   status        必填，期望 HTTP 状态码
+#   error_code    期望 body.error.code
+#   headers       期望存在的响应头
+#   header_equals 期望响应头的精确值
+#   json_keys     期望 response body 顶层字段
+#   equals        body 顶层字段精确值
+#   contains      body 顶层字段包含子串
+#   min_contexts / max_contexts  contexts 数量上下界
+#   max_latency_ms  latency_ms 上界（给足余量，防性能退化）
+#   min_chunks    /health 里 chunks 的下界
+cases:
+  # ---------- 正常路径 ----------
+  - id: normal_identification_freq
+    title: 正常-家庭经济困难认定频次
+    method: POST
+    path: /query
+    json:
+      question: 家庭经济困难学生认定多久评一次？
+    expect:
+      status: 200
+      json_keys: [question, answer, contexts, latency_ms, used_llm, mode, top_k]
+      contains:
+        answer: 每学年
+      min_contexts: 1
+      equals:
+        mode: hybrid
+        top_k: 5
+        used_llm: false
+      max_latency_ms: 3000
+
+  - id: normal_national_grant
+    title: 正常-国家奖学金金额
+    method: POST
+    path: /query
+    json:
+      question: 本专科生国家奖学金一年多少钱？
+    expect:
+      status: 200
+      min_contexts: 1
+      equals:
+        mode: hybrid
+      max_latency_ms: 3000
+
+  - id: normal_student_loan
+    title: 正常-助学贷款额度调整
+    method: POST
+    path: /query
+    json:
+      question: 助学贷款的额度调整到多少了？
+    expect:
+      status: 200
+      min_contexts: 1
+      max_latency_ms: 3000
+
+  - id: normal_suspend_school
+    title: 正常-休学与复学
+    method: POST
+    path: /query
+    json:
+      question: 学生休学一般以多长时间为限？
+    expect:
+      status: 200
+      min_contexts: 1
+      max_latency_ms: 3000
+
+  - id: normal_work_study
+    title: 正常-勤工助学时长
+    method: POST
+    path: /query
+    json:
+      question: 勤工助学每周工作时间有什么限制？
+    expect:
+      status: 200
+      min_contexts: 1
+      max_latency_ms: 3000
+
+  - id: normal_mode_bm25
+    title: 正常-显式指定 bm25 模式
+    method: POST
+    path: /query
+    json:
+      question: 国家励志奖学金和国家奖学金可以同时获得吗？
+      mode: bm25
+    expect:
+      status: 200
+      equals:
+        mode: bm25
+      min_contexts: 1
+      max_latency_ms: 3000
+
+  - id: normal_topk_3
+    title: 正常-top_k=3
+    method: POST
+    path: /query
+    json:
+      question: 转专业需要什么条件？
+      top_k: 3
+    expect:
+      status: 200
+      equals:
+        top_k: 3
+      min_contexts: 1
+      max_contexts: 3
+      max_latency_ms: 3000
+
+  - id: normal_request_id_passthrough
+    title: 正常-请求 ID 透传
+    method: POST
+    path: /query
+    headers:
+      X-Request-ID: fixed-test-id-0001
+    json:
+      question: 学生申诉的受理时限是多久？
+    expect:
+      status: 200
+      headers: [X-Request-ID, X-Process-Time-Ms]
+      header_equals:
+        X-Request-ID: fixed-test-id-0001
+
+  # ---------- 空问题 ----------
+  - id: empty_zero_length
+    title: 异常-空字符串问题
+    method: POST
+    path: /query
+    json:
+      question: ""
+    expect:
+      status: 400
+      error_code: EMPTY_QUESTION
+      headers: [X-Request-ID]
+
+  - id: empty_whitespace
+    title: 异常-纯空格问题
+    method: POST
+    path: /query
+    json:
+      question: "   \t  "
+    expect:
+      status: 400
+      error_code: EMPTY_QUESTION
+
+  - id: empty_newlines
+    title: 异常-纯换行问题
+    method: POST
+    path: /query
+    json:
+      question: "\n\n\n"
+    expect:
+      status: 400
+      error_code: EMPTY_QUESTION
+
+  # ---------- 超长 ----------
+  - id: too_long_2001
+    title: 异常-超过 2000 字上限 1 个字
+    method: POST
+    path: /query
+    json:
+      question: "__LONG_2001__"
+    expect:
+      status: 400
+      error_code: QUESTION_TOO_LONG
+
+  - id: too_long_5000
+    title: 异常-5000 字问题
+    method: POST
+    path: /query
+    json:
+      question: "__LONG_5000__"
+    expect:
+      status: 400
+      error_code: QUESTION_TOO_LONG
+
+  # ---------- 无命中 ----------
+  - id: no_hit_weather
+    title: 边界-知识库外问题（天气）
+    method: POST
+    path: /query
+    json:
+      question: 今天苏州天气怎么样？
+    expect:
+      status: 200
+      min_contexts: 0
+      max_latency_ms: 3000
+
+  - id: no_hit_quantum
+    title: 边界-知识库外问题（量子计算）
+    method: POST
+    path: /query
+    json:
+      question: 量子计算机的退相干时间如何测量？
+    expect:
+      status: 200
+      min_contexts: 0
+      max_latency_ms: 3000
+
+  # ---------- 非法参数 ----------
+  - id: invalid_topk_zero
+    title: 异常-top_k=0
+    method: POST
+    path: /query
+    json:
+      question: 国家奖学金多少钱？
+      top_k: 0
+    expect:
+      status: 422
+      error_code: INVALID_PARAM
+
+  - id: invalid_topk_eleven
+    title: 异常-top_k=11
+    method: POST
+    path: /query
+    json:
+      question: 国家奖学金多少钱？
+      top_k: 11
+    expect:
+      status: 422
+      error_code: INVALID_PARAM
+
+  - id: invalid_mode
+    title: 异常-未知检索模式
+    method: POST
+    path: /query
+    json:
+      question: 国家奖学金多少钱？
+      mode: magic
+    expect:
+      status: 422
+      error_code: INVALID_PARAM
+
+  - id: missing_question
+    title: 异常-缺少 question 字段
+    method: POST
+    path: /query
+    json:
+      top_k: 3
+    expect:
+      status: 422
+      error_code: INVALID_PARAM
+
+  - id: extra_field
+    title: 异常-多余字段（extra=forbid）
+    method: POST
+    path: /query
+    json:
+      question: 国家奖学金多少钱？
+      foo: bar
+    expect:
+      status: 422
+      error_code: INVALID_PARAM
+
+  - id: wrong_type_topk
+    title: 异常-top_k 传字符串
+    method: POST
+    path: /query
+    json:
+      question: 国家奖学金多少钱？
+      top_k: "five"
+    expect:
+      status: 422
+      error_code: INVALID_PARAM
+
+  # ---------- 健康检查 ----------
+  - id: health_ok
+    title: 正常-/health 就绪
+    method: GET
+    path: /health
+    expect:
+      status: 200
+      json_keys: [status, chunks, embedder, version, index_dir]
+      equals:
+        status: ok
+        embedder: hash
+
+  - id: health_chunks_positive
+    title: 正常-/health 报告索引块数
+    method: GET
+    path: /health
+    expect:
+      status: 200
+      min_chunks: 1
+
+  # ---------- 边界 ----------
+  - id: boundary_topk_1
+    title: 边界-top_k=1 下界
+    method: POST
+    path: /query
+    json:
+      question: 国家奖学金评审流程是什么？
+      top_k: 1
+    expect:
+      status: 200
+      equals:
+        top_k: 1
+      min_contexts: 1
+      max_contexts: 1
+
+  - id: boundary_topk_10
+    title: 边界-top_k=10 上界
+    method: POST
+    path: /query
+    json:
+      question: 学生资助政策一共有哪几项？
+      top_k: 10
+    expect:
+      status: 200
+      equals:
+        top_k: 10
+      min_contexts: 1
+      max_contexts: 10
+
+  - id: boundary_len_2000
+    title: 边界-正好 2000 字
+    method: POST
+    path: /query
+    json:
+      question: "__LEN_2000__"
+    expect:
+      status: 200
+      max_latency_ms: 5000

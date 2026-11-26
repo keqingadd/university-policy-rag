@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, feat/** ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  unit:
+    name: 单元测试 (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: 构建索引
+        run: python scripts/build_index.py --docs data/docs --out data/index
+      - name: 跑单测
+        run: python -m pytest tests -q -m "not live" --ignore=tests/api
+
+  api:
+    name: 接口测试 (真实 HTTP)
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: 构建索引
+        run: python scripts/build_index.py --docs data/docs --out data/index
+      - name: 起服务
+        run: |
+          nohup python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 > server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then echo "server ready"; break; fi
+            sleep 1
+          done
+          curl -s http://127.0.0.1:8000/health
+      - name: 跑接口测试并生成 HTML 报告
+        env:
+          RAG_BASE_URL: http://127.0.0.1:8000
+        run: python -m pytest tests -q --html=reports/api.html --self-contained-html
+      - name: 上传测试报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-html-report
+          path: |
+            reports/api.html
+            server.log
+      - name: 服务日志
+        if: failure()
+        run: cat server.log || true
+
+  docker:
+    name: 镜像构建与容器冒烟
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: 构建镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: university-policy-rag:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: 容器冒烟
+        run: |
+          docker run -d --name rag -p 8000:8000 university-policy-rag:ci
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then echo "container ready"; break; fi
+            sleep 1
+          done
+          curl -s http://127.0.0.1:8000/health
+          curl -s -X POST http://127.0.0.1:8000/query \
+            -H 'Content-Type: application/json' \
+            -d '{"question":"国家励志奖学金的申请条件是什么？","top_k":3}' | head -c 500
+      - name: 查看容器日志
+        if: always()
+        run: docker logs rag || true
+      - name: 检查镜像体积
+        run: docker images university-policy-rag:ci --format '{{.Size}}'
