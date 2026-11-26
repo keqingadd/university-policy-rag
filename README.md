@@ -320,6 +320,13 @@ English bullet：
 
 > Built a retrieval-augmented QA assistant over public university policies: heading-aware chunking, hybrid BM25 + vector retrieval with RRF, query rewriting (colloquial → policy terminology), and citation-grounded LLM generation. Created a 16-question labeled eval set; query rewriting lifted Hit@1 on colloquial queries from 66.7% to 100% (MRR 0.71→1.00). Shipped a FastAPI service (40 pytest cases, multi-stage Docker, GitHub Actions CI, 157 QPS at P95 69 ms) and a tool-calling agent layer (policy search / calendar / web fetch, session memory, 20/20 tool-selection accuracy on a self-built set).
 
+### 三行版（一页简历放 3 个项目时用）
+
+> **高校政策问答服务（RAG + FastAPI + Agent）**｜个人项目｜2026.11
+> - 标题感知切片 + BM25/向量混合检索（RRF）+ 查询改写 + 带引用生成；自建 16 题评测，口语问法 Hit@1 66.7%→100%。
+> - FastAPI 服务化：统一错误码 + 40 条 pytest 数据驱动接口测试 + 多阶段 Docker（343 MB、非 root）+ GitHub Actions 三 job；压测 157 QPS / P95 69 ms。
+> - Agent 层：政策检索 / 校历 / 网页抓取三工具 + 规则规划器 + 会话记忆，20 条标注集工具选择 20/20；全量 90 条测试。
+
 ## 11. 演示与答辩材料
 
 - `docs/演示脚本.md`：3 分钟现场演示逐句稿
