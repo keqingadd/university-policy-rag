@@ -26,6 +26,9 @@ RUN groupadd --system appuser \
 COPY --from=builder /opt/venv /opt/venv
 COPY api ./api
 COPY src ./src
+COPY tools ./tools
+COPY agent ./agent
+COPY data/calendar ./data/calendar
 COPY --from=builder /build/data/index ./data/index
 USER appuser
 EXPOSE 8000

@@ -87,15 +87,25 @@ jobs:
           cache-to: type=gha,mode=max
       - name: 容器冒烟
         run: |
+          set -euo pipefail
           docker run -d --name rag -p 8000:8000 university-policy-rag:ci
+          ready=0
           for i in $(seq 1 40); do
-            if curl -sf http://127.0.0.1:8000/health > /dev/null; then echo "container ready"; break; fi
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then echo "container ready"; ready=1; break; fi
             sleep 1
           done
-          curl -s http://127.0.0.1:8000/health
-          curl -s -X POST http://127.0.0.1:8000/query \
+          if [ "$ready" != "1" ]; then echo "::error::容器 40 秒内未就绪"; docker logs rag; exit 1; fi
+          curl -sf http://127.0.0.1:8000/health
+          curl -sf -X POST http://127.0.0.1:8000/query \
             -H 'Content-Type: application/json' \
             -d '{"question":"国家励志奖学金的申请条件是什么？","top_k":3}' | head -c 500
+          echo
+          # Agent 层：工具目录与一次真实调用（防止镜像漏拷 tools/ agent/）
+          curl -sf http://127.0.0.1:8000/agent/tools | grep -q '"policy_search"' || { echo "::error::/agent/tools 缺 policy_search"; exit 1; }
+          curl -sf -X POST http://127.0.0.1:8000/agent/chat \
+            -H 'Content-Type: application/json' \
+            -d '{"message":"今天第几教学周了","session_id":"ci"}' | grep -q '"used_tools":\["calendar"\]' || { echo "::error::/agent/chat 未选中 calendar"; exit 1; }
+          echo "agent smoke ok"
       - name: 查看容器日志
         if: always()
         run: docker logs rag || true
